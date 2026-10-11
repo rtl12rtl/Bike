@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>לוח בקרה לאופני כושר</title>
+<style>
+  :root{
+    --bg:#0b0f17; --card:#141b27; --card2:#1a2332; --txt:#f2f6fb; --mut:#7d8aa0;
+    --acc:#2ee6a6; --hr:#ff4d6d; --warn:#ffb020;
+  }
+  *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    min-height:100vh;padding:max(12px,env(safe-area-inset-top)) 12px 16px;display:flex;flex-direction:column;gap:12px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .status{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mut)}
+  .dot{width:10px;height:10px;border-radius:50%;background:#555}
+  .dot.on{background:var(--acc);box-shadow:0 0 10px var(--acc)}
+  button{font:inherit;border:0;border-radius:12px;padding:10px 16px;background:var(--card2);color:var(--txt);cursor:pointer}
+  button.primary{background:var(--acc);color:#04251a;font-weight:700}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--card);border-radius:20px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;min-height:110px}
+  .label{font-size:14px;color:var(--mut);display:flex;align-items:center;gap:6px}
+  .val{font-variant-numeric:tabular-nums;font-weight:800;line-height:1;direction:ltr;text-align:right}
+  .unit{font-size:16px;color:var(--mut);font-weight:500;margin-inline-start:6px}
+  .speed{grid-column:1/-1;min-height:200px}
+  .speed .val{font-size:clamp(72px,26vw,140px);color:var(--acc)}
+  .bar{height:10px;border-radius:6px;background:var(--card2);overflow:hidden;direction:ltr}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2ee6a6,#ffb020,#ff4d6d);transition:width .4s}
+  .small .val{font-size:clamp(36px,12vw,60px)}
+  .hr .val{color:var(--hr)}
+  .heart{display:inline-block;transition:color .3s}
+  .heart.beat{animation:beat var(--bt,1s) infinite}
+  @keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.35)}30%{transform:scale(1)}}
+  .zone{font-size:13px;color:var(--mut)}
+  details{background:var(--card);border-radius:16px;padding:12px 16px}
+  summary{cursor:pointer;color:var(--mut)}
+  .settings{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .settings label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
+  input,select{font:inherit;background:var(--card2);color:var(--txt);border:0;border-radius:10px;padding:10px;width:100%}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .msg{font-size:13px;color:var(--warn);display:none}
+  @media (orientation:landscape) and (max-height:520px){
+    .grid{grid-template-columns:repeat(3,1fr)} .speed{grid-column:span 3;min-height:140px}
+    .speed .val{font-size:90px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="status"><span class="dot" id="dot"></span><span id="st">לא מחובר</span></div>
+  <div class="actions">
+    <button id="demo">הדגמה</button>
+    <button class="primary" id="connect">חבר Pico</button>
+  </div>
+</header>
+<div class="msg" id="msg"></div>
+
+<div class="grid">
+  <div class="card speed">
+    <div class="label">מהירות</div>
+    <div class="val"><span id="spd">0.0</span><span class="unit">קמ״ש</span></div>
+    <div class="bar"><i id="spdbar"></i></div>
+  </div>
+  <div class="card small hr">
+    <div class="label"><span class="heart" id="heart">♥</span> דופק</div>
+    <div class="val"><span id="hr">--</span><span class="unit">bpm</span></div>
+    <div class="zone" id="zone">&nbsp;</div>
+  </div>
+  <div class="card small">
+    <div class="label">קלוריות</div>
+    <div class="val"><span id="kcal">0</span><span class="unit">קק״ל</span></div>
+    <div class="zone" id="kmode">&nbsp;</div>
+  </div>
+  <div class="card small">
+    <div class="label">מרחק</div>
+    <div class="val"><span id="dist">0.00</span><span class="unit">ק״מ</span></div>
+  </div>
+  <div class="card small">
+    <div class="label">זמן אימון</div>
+    <div class="val"><span id="time">00:00</span></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button id="reset">אפס אימון</button>
+</div>
+
+<details>
+  <summary>הגדרות (לחישוב קלוריות)</summary>
+  <div class="settings">
+    <label>גיל<input id="age" type="number" inputmode="numeric" value="40"></label>
+    <label>משקל (ק״ג)<input id="wt" type="number" inputmode="numeric" value="80"></label>
+    <label>מין<select id="sex"><option value="m">גבר</option><option value="f">אישה</option></select></label>
+    <label>היקף גלגל (מ׳)<input id="circ" type="number" step="0.01" value="5"></label>
+  </div>
+</details>
+
+<script>
+const $ = id => document.getElementById(id);
+const cfg = {age:40, wt:80, sex:'m', circ:5};
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('bikecfg')||'{}')); } catch(e){}
+function loadCfg(){ $('age').value=cfg.age; $('wt').value=cfg.wt; $('sex').value=cfg.sex; $('circ').value=cfg.circ; }
+function saveCfg(){
+  cfg.age=+$('age').value||40; cfg.wt=+$('wt').value||80; cfg.sex=$('sex').value; cfg.circ=+$('circ').value||5;
+  try{ localStorage.setItem('bikecfg', JSON.stringify(cfg)); }catch(e){}
+}
+loadCfg();
+['age','wt','sex','circ'].forEach(i => $(i).addEventListener('change', saveCfg));
+
+// Workout state
+let S = {meters:0, secs:0, kcal:0, baseRev:null, revs:0, lastT:null};
+const MAX_SPEED = 40;
+
+function met(kmh){ return kmh<16?4 : kmh<19?6 : kmh<22?8 : kmh<26?10 : 12; }
+
+function update(d){
+  const now = performance.now();
+  const dt = S.lastT ? Math.min((now-S.lastT)/1000, 3) : 0;
+  S.lastT = now;
+
+  // distance from revolution counter (so no drift)
+  if (S.baseRev === null) S.baseRev = d.rev;
+  S.revs = d.rev - S.baseRev;
+  if (S.revs < 0) { S.baseRev = d.rev; S.revs = 0; }
+  const meters = S.revs * cfg.circ;
+  S.meters = meters;
+
+  const kmh = d.kmh * (cfg.circ/5);   // firmware assumes 5m; rescale if changed
+  const moving = kmh > 0.5;
+  if (moving) S.secs += dt;
+
+  // calories
+  let mode = '';
+  if (moving || d.hr>0) {
+    if (d.hr > 0) {
+      const w=cfg.wt, a=cfg.age;
+      const perMin = cfg.sex==='m'
+        ? (-55.0969 + 0.6309*d.hr + 0.1988*w + 0.2017*a)/4.184
+        : (-20.4022 + 0.4472*d.hr - 0.1263*w + 0.074*a)/4.184;
+      if (moving) S.kcal += Math.max(0, perMin) * dt/60;
+      mode = 'לפי דופק';
+    } else if (moving) {
+      S.kcal += met(kmh) * cfg.wt * dt/3600;
+      mode = 'הערכה לפי מהירות';
+    }
+  }
+
+  // render
+  $('spd').textContent = kmh.toFixed(1);
+  $('spdbar').style.width = Math.min(100, kmh/MAX_SPEED*100)+'%';
+  $('dist').textContent = (S.meters/1000).toFixed(2);
+  const t = Math.floor(S.secs), h=Math.floor(t/3600), m=Math.floor(t%3600/60), s=t%60;
+  $('time').textContent = (h?String(h)+':':'') + String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  $('kcal').textContent = Math.round(S.kcal);
+  $('kmode').textContent = mode || '\u00a0';
+
+  const hrEl=$('hr'), heart=$('heart');
+  if (d.hr > 0) {
+    hrEl.textContent = d.hr;
+    heart.classList.add('beat'); heart.style.setProperty('--bt', (60/d.hr)+'s');
+    const pct = d.hr / (220-cfg.age) * 100;
+    const z = pct<60?['חימום','#6ea8ff'] : pct<70?['שריפת שומן','#2ee6a6'] : pct<80?['אירובי','#ffb020'] : pct<90?['מאמץ גבוה','#ff7a45'] : ['מקסימום','#ff4d6d'];
+    $('zone').textContent = z[0]+' · '+Math.round(pct)+'%';
+    $('zone').style.color = z[1]; hrEl.style.color = z[1];
+  } else {
+    hrEl.textContent = '--'; hrEl.style.color='';
+    heart.classList.remove('beat');
+    $('zone').textContent = d.lead===0 ? 'אחוז בידיות' : '\u00a0'; $('zone').style.color='';
+  }
+}
+
+function setStatus(on, txt){ $('dot').classList.toggle('on', on); $('st').textContent = txt; }
+function showMsg(t){ const m=$('msg'); m.textContent=t; m.style.display = t?'block':'none'; }
+
+$('reset').onclick = () => { S = {meters:0, secs:0, kcal:0, baseRev:null, revs:0, lastT:null}; update({kmh:0,rev:0,hr:0,lead:1}); };
+
+// ---- Web Serial ----
+let port=null, reader=null, demoTimer=null;
+$('connect').onclick = async () => {
+  stopDemo();
+  if (!('serial' in navigator)) {
+    if ('usb' in navigator) { return connectUSB(); }
+    showMsg('הדפדפן לא תומך ב-Web Serial. פתח ב-Chrome באנדרואיד (גרסה עדכנית) דרך כתובת https.');
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    setStatus(true,'מחובר'); showMsg('');
+    S.baseRev = null; S.lastT = null;
+    const dec = new TextDecoderStream();
+    port.readable.pipeTo(dec.writable).catch(()=>{});
+    reader = dec.readable.getReader();
+    let buf='';
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0,i).trim(); buf = buf.slice(i+1);
+        if (line[0]==='{') { try { update(JSON.parse(line)); } catch(e){} }
+      }
+    }
+  } catch(e) {
+    showMsg('שגיאת חיבור: ' + (e.message||e));
+  }
+  setStatus(false,'לא מחובר');
+};
+
+// ---- WebUSB fallback (CDC-ACM of the Pico) ----
+async function connectUSB(){
+  try {
+    const dev = await navigator.usb.requestDevice({filters:[{vendorId:0x2e8a}]});
+    await dev.open();
+    if (!dev.configuration) await dev.selectConfiguration(1);
+    let comm=null, data=null;
+    for (const itf of dev.configuration.interfaces) {
+      const a = itf.alternates[0];
+      if (a.interfaceClass===2) comm = itf.interfaceNumber;
+      if (a.interfaceClass===10) {
+        const ep = a.endpoints.find(e => e.direction==='in');
+        data = {n:itf.interfaceNumber, ep: ep && ep.endpointNumber};
+      }
+    }
+    if (!data || !data.ep) throw new Error('לא נמצא ממשק סריאלי ב-Pico');
+    if (comm!==null) await dev.claimInterface(comm);
+    await dev.claimInterface(data.n);
+    if (comm!==null) await dev.controlTransferOut({requestType:'class',recipient:'interface',request:0x22,value:0x01,index:comm});
+    setStatus(true,'מחובר (USB)'); showMsg('');
+    S.baseRev=null; S.lastT=null;
+    const dec = new TextDecoder(); let buf='';
+    while (true) {
+      const r = await dev.transferIn(data.ep, 64);
+      buf += dec.decode(r.data);
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0,i).trim(); buf = buf.slice(i+1);
+        if (line[0]==='{') { try { update(JSON.parse(line)); } catch(e){} }
+      }
+    }
+  } catch(e) {
+    showMsg('שגיאת חיבור: ' + (e.message||e));
+  }
+  setStatus(false,'לא מחובר');
+}
+
+// ---- Demo mode ----
+function stopDemo(){ if(demoTimer){clearInterval(demoTimer);demoTimer=null;} }
+$('demo').onclick = () => {
+  if (demoTimer) { stopDemo(); setStatus(false,'לא מחובר'); return; }
+  setStatus(true,'מצב הדגמה'); showMsg('');
+  S.baseRev=null; S.lastT=null;
+  let rev=0, t=0;
+  demoTimer = setInterval(() => {
+    t++;
+    const kmh = 24 + 6*Math.sin(t/10);
+    rev += kmh/3.6/5;
+    update({kmh, rev:Math.floor(rev), hr: Math.round(135+25*Math.sin(t/15)), lead:1});
+  }, 1000);
+};
+
+update({kmh:0,rev:0,hr:0,lead:1});
+</script>
+</body>
+</html>
