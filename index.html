@@ -212,6 +212,7 @@ $('connect').onclick = async () => {
 
 // ---- WebUSB fallback (CDC-ACM of the Pico) ----
 async function connectUSB(){
+  let step = 'request', commErr = '', dtrErr = '', info = '';
   try {
     const dev = await navigator.usb.requestDevice({filters:[{vendorId:0x2e8a}]});
     await dev.open();
@@ -225,11 +226,17 @@ async function connectUSB(){
         data = {n:itf.interfaceNumber, ep: ep && ep.endpointNumber};
       }
     }
+    info = dev.configuration.interfaces.map(i => i.interfaceNumber+':class'+i.alternates[0].interfaceClass).join(', ');
     if (!data || !data.ep) throw new Error('לא נמצא ממשק סריאלי ב-Pico');
-    if (comm!==null) await dev.claimInterface(comm);
+    step = 'claim data';
     await dev.claimInterface(data.n);
-    if (comm!==null) await dev.controlTransferOut({requestType:'class',recipient:'interface',request:0x22,value:0x01,index:comm});
-    setStatus(true,'מחובר (USB)'); showMsg('');
+    step = 'claim comm';
+    if (comm!==null) { try { await dev.claimInterface(comm); } catch(e) { commErr = e.message; } }
+    step = 'dtr';
+    if (comm!==null) { try { await dev.controlTransferOut({requestType:'class',recipient:'interface',request:0x22,value:0x01,index:comm}); } catch(e) { dtrErr = e.message; } }
+    step = 'read';
+    setStatus(true,'מחובר (USB)');
+    showMsg((commErr||dtrErr) ? ('אזהרה: comm='+commErr+' dtr='+dtrErr+' | ממשקים: '+info) : '');
     S.baseRev=null; S.lastT=null;
     const dec = new TextDecoder(); let buf='';
     while (true) {
@@ -242,7 +249,7 @@ async function connectUSB(){
       }
     }
   } catch(e) {
-    showMsg('שגיאת חיבור: ' + (e.message||e));
+    showMsg('שלב: ' + step + ' | ' + (e.message||e) + ' | ממשקים: ' + info);
   }
   setStatus(false,'לא מחובר');
 }
