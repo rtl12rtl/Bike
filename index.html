@@ -51,6 +51,7 @@
   <div class="status"><span class="dot" id="dot"></span><span id="st">לא מחובר</span></div>
   <div class="actions">
     <button id="demo">הדגמה</button>
+    <button id="connectusb">חבר (USB)</button>
     <button class="primary" id="connect">חבר Pico</button>
   </div>
 </header>
@@ -245,6 +246,12 @@ async function connectUSB(){
   }
   setStatus(false,'לא מחובר');
 }
+
+$('connectusb').onclick = () => {
+  stopDemo();
+  if (!('usb' in navigator)) { showMsg('הדפדפן לא תומך ב-WebUSB.'); return; }
+  connectUSB();
+};
 
 // ---- Demo mode ----
 function stopDemo(){ if(demoTimer){clearInterval(demoTimer);demoTimer=null;} }
